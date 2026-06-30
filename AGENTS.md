@@ -2,8 +2,8 @@
 
 This project uses Go. AI agents must use **golangci-lint v2** for all code quality and formatting tasks.
 
-## 🛑 Strict Policy: No Commits
-**Do not perform any git commits, pushes, or version control actions.** Your responsibility ends at preparing the code changes and ensuring they pass all local checks. The human user will handle all commits.
+## 🛑 Strict Policy: No Auto Commits
+**Do not perform any git commits, pushes, or version control actions without explicit user instruction.** 
 
 ## Setup Commands
 - **Initialize:** `go mod download`

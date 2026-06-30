@@ -6,7 +6,7 @@ formatters:
     - swaggo
   settings:
     gofumpt:
-      module-path: your/module-path
+      module-path: github.com/lucidfrontier45/wolgo
       extra-rules: true
 linters:
   default: standard
