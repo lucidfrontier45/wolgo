@@ -7,7 +7,7 @@ import (
 )
 
 var registerCmd = &cobra.Command{
-	Use:   "register <mac> <alias>",
+	Use:   "register <alias> <mac>",
 	Short: "Register an alias for a MAC address",
 	Long: `Register a human-readable alias for a MAC address.
 
@@ -15,15 +15,15 @@ The alias is saved to ~/.wolgo/targets.json and can then be used wherever a
 MAC address is accepted. Registering an existing alias overwrites it.
 
 Examples:
-  wolgo register 00:11:22:33:44:55 office-pc`,
+  wolgo register office-pc 00:11:22:33:44:55`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(_ *cobra.Command, args []string) error {
-		alias := args[1]
+		alias := args[0]
 		if err := ValidateAlias(alias); err != nil {
 			return err
 		}
 
-		normalized, err := ValidateMAC(args[0])
+		normalized, err := ValidateMAC(args[1])
 		if err != nil {
 			return err
 		}

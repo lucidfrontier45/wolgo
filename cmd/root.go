@@ -30,7 +30,7 @@ Examples:
   wolgo find-ip 00:11:22:33:44:55  Find IP from MAC address
   wolgo find-ip office-pc          Find IP by alias
   wolgo find-ip --all              List registered aliases
-  wolgo register 00:11:22:33:44:55 office-pc
+  wolgo register office-pc 00:11:22:33:44:55
   wolgo list                      List aliases
   wolgo remove office-pc          Remove alias`,
 	Args: func(_ *cobra.Command, args []string) error {
