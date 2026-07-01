@@ -23,7 +23,7 @@ go build
 
 ```
 wolgo [MAC_ADDRESS | alias] [--all]
-wolgo register <alias> <mac>
+wolgo register <alias> <MAC_ADDRESS>
 wolgo list
 wolgo remove <alias>
 wolgo find-ip [MAC_ADDRESS | alias] [--all]
