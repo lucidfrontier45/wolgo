@@ -95,17 +95,28 @@ func runWakeAll() error {
 		return fmt.Errorf("no registered targets; use 'wolgo register' first")
 	}
 
+	var errs int
 	for _, entry := range entries {
 		macBytes, err := parseMAC(entry.MAC)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "skipping %s: invalid MAC %s\n", entry.Alias, entry.MAC)
+			errs++
 			continue
 		}
 		if err := sendWOL(macBytes); err != nil {
 			fmt.Fprintf(os.Stderr, "failed to send WOL to %s: %v\n", entry.Alias, err)
+			errs++
 			continue
 		}
 		fmt.Printf("Wake-on-LAN packet sent to %s -> %s\n", entry.Alias, entry.MAC)
+	}
+	if errs > 0 {
+		return fmt.Errorf(
+			"sent WOL to %d/%d targets (%d errors)",
+			len(entries)-errs,
+			len(entries),
+			errs,
+		)
 	}
 	return nil
 }

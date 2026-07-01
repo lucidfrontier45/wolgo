@@ -12,8 +12,8 @@ import (
 var ErrEmptyAlias = errors.New("alias must not be empty")
 
 // ErrInvalidAlias is returned when an alias contains forbidden characters
-// (whitespace).
-var ErrInvalidAlias = errors.New("alias must not contain spaces or tabs")
+// (whitespace or control characters).
+var ErrInvalidAlias = errors.New("alias must not contain spaces, tabs, or control characters")
 
 // ErrAliasIsMAC is returned when an alias collides with the MAC address
 // format, which would defeat the MAC-beats-alias resolution rule.
@@ -27,7 +27,9 @@ func ValidateAlias(alias string) error {
 	if alias == "" {
 		return ErrEmptyAlias
 	}
-	if strings.ContainsAny(alias, " \t") {
+	if strings.ContainsAny(alias, " \t") || strings.IndexFunc(alias, func(r rune) bool {
+		return r < 0x20 || r == 0x7f
+	}) >= 0 {
 		return ErrInvalidAlias
 	}
 	if normalizeMAC(alias) != "" {

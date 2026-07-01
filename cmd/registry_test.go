@@ -3,7 +3,6 @@ package cmd
 import (
 	"path/filepath"
 	"reflect"
-	"sort"
 	"testing"
 )
 
@@ -114,7 +113,7 @@ func TestValidateAlias(t *testing.T) {
 		{"underscore_dash", "my_nas-1", false},
 		{"space", "office pc", true},
 		{"tab", "office\tpc", true},
-		{"newline_is_ok_but_spaces_not", "office\npc", false},
+		{"newline_rejected", "office\npc", true},
 		{"mac_like_colon", "00:11:22:33:44:55", true},
 		{"mac_like_dash", "00-11-22-33-44-55", true},
 		{"mac_like_compact", "001122334455", true},
@@ -131,9 +130,6 @@ func TestValidateAlias(t *testing.T) {
 			}
 		})
 	}
-	// silence unused-from-above (newline_is_ok_but_spaces_not kept for
-	// documentation: newline itself is not space/tab so it passes).
-	_ = sort.Strings
 }
 
 func TestValidateMAC(t *testing.T) {

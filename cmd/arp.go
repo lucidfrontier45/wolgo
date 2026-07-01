@@ -29,6 +29,9 @@ func FindIPsFromMAC(macStr string) ([]net.IP, error) {
 	}
 }
 
+// macStripReplacer strips common MAC address separators.
+var macStripReplacer = strings.NewReplacer(":", "", "-", "", " ", "")
+
 // normalizeMAC strips separators, lowercases, and zero-pads 1-digit octets.
 func normalizeMAC(mac string) string {
 	mac = strings.TrimSpace(mac)
@@ -74,7 +77,7 @@ func normalizeMAC(mac string) string {
 		return builder.String()
 	}
 
-	compact := strings.NewReplacer(":", "", "-", "", " ", "").Replace(mac)
+	compact := macStripReplacer.Replace(mac)
 	compact = strings.ToLower(compact)
 	if len(compact) != 12 {
 		return ""
