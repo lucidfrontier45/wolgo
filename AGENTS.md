@@ -32,7 +32,7 @@ Detect the existing layout or request guidance for new projects:
 ## Development Guidelines
 - **Error Handling:** Handle all errors explicitly. Do not use `_` without a documented reason.
 - **Documentation:** Every exported identifier must have a comment starting with its name.
-- **V2 Config:** Ensure `.golangci.yml` uses `version: "2"`.
+- **V2 Config:** Ensure `.golangci.yaml` uses `version: "2"`.
 - **LSP Warnings:** Ignore unused imports/warnings from LSP; they will be resolved by the linter's autofix and formatter steps.
 - **Loop Style:** Prefer `for i := range N` over `for i := 0; i<N; i++` for index-based iteration loops.
 
