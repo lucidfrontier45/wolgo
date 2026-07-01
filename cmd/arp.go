@@ -29,14 +29,62 @@ func FindIPsFromMAC(macStr string) ([]net.IP, error) {
 	}
 }
 
-// normalizeMAC strips separators and lowercases a MAC address string.
+// normalizeMAC strips separators, lowercases, and zero-pads 1-digit octets.
 func normalizeMAC(mac string) string {
-	mac = strings.NewReplacer(":", "", "-", "", " ", "").Replace(mac)
-	mac = strings.ToLower(mac)
-	if len(mac) != 12 {
+	mac = strings.TrimSpace(mac)
+	if !strings.ContainsAny(mac, ":- ") {
+		compact := strings.ToLower(mac)
+		if len(compact) != 12 {
+			return ""
+		}
+		for _, r := range compact {
+			if !strings.ContainsRune("0123456789abcdef", r) {
+				return ""
+			}
+		}
+		return compact
+	}
+
+	parts := strings.FieldsFunc(mac, func(r rune) bool {
+		return r == ':' || r == '-' || r == ' '
+	})
+	if len(parts) == 0 {
 		return ""
 	}
-	return mac
+
+	var builder strings.Builder
+	builder.Grow(12)
+
+	for _, part := range parts {
+		if len(part) == 0 || len(part) > 2 {
+			return ""
+		}
+		if len(part) == 1 {
+			builder.WriteByte('0')
+		}
+		for _, r := range part {
+			if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
+				return ""
+			}
+		}
+		builder.WriteString(strings.ToLower(part))
+	}
+
+	if builder.Len() == 12 {
+		return builder.String()
+	}
+
+	compact := strings.NewReplacer(":", "", "-", "", " ", "").Replace(mac)
+	compact = strings.ToLower(compact)
+	if len(compact) != 12 {
+		return ""
+	}
+	for _, r := range compact {
+		if !strings.ContainsRune("0123456789abcdef", r) {
+			return ""
+		}
+	}
+	return compact
 }
 
 // findIPsFromMACLinux parses /proc/net/arp on Linux.
