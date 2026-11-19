@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -287,5 +289,103 @@ func TestAllTargetsEnumeration(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("AllTargets() = %v, want %v", got, want)
+	}
+}
+
+func TestLoadRegistryNullFile(t *testing.T) {
+	withTempHome(t)
+
+	path, err := RegistryPath()
+	if err != nil {
+		t.Fatalf("RegistryPath() error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte("null\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	// A JSON "null" file must load as an empty registry and must remain
+	// writable (register would previously panic on the nil map).
+	reg, err := LoadRegistry()
+	if err != nil {
+		t.Fatalf("LoadRegistry() error = %v", err)
+	}
+	if len(reg) != 0 {
+		t.Fatalf("len(reg) = %d, want 0", len(reg))
+	}
+
+	err = WithRegistryLock(func() error {
+		reg, err = LoadRegistry()
+		if err != nil {
+			return err
+		}
+		reg["x"] = "001122334455"
+		return SaveRegistry(reg)
+	})
+	if err != nil {
+		t.Fatalf("register-on-null-registry error = %v", err)
+	}
+}
+
+func TestSaveRegistryAtomicNoTempFilesLeft(t *testing.T) {
+	withTempHome(t)
+
+	if err := SaveRegistry(Registry{"a": "001122334455"}); err != nil {
+		t.Fatalf("SaveRegistry() error = %v", err)
+	}
+	if err := SaveRegistry(Registry{"a": "001122334455", "b": "aabbccddeeff"}); err != nil {
+		t.Fatalf("second SaveRegistry() error = %v", err)
+	}
+
+	path, err := RegistryPath()
+	if err != nil {
+		t.Fatalf("RegistryPath() error = %v", err)
+	}
+	dir := filepath.Dir(path)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir() error = %v", err)
+	}
+	for _, e := range entries {
+		if e.Name() != registryFileName {
+			t.Fatalf("stale file %q left in registry dir", e.Name())
+		}
+	}
+}
+
+func TestWithRegistryLockConcurrentUpdates(t *testing.T) {
+	withTempHome(t)
+
+	const workers = 8
+	errs := make(chan error, workers)
+	for i := range workers {
+		alias := fmt.Sprintf("worker-%d", i)
+		go func() {
+			errs <- WithRegistryLock(func() error {
+				reg, err := LoadRegistry()
+				if err != nil {
+					return err
+				}
+				reg[alias] = "001122334455"
+				return SaveRegistry(reg)
+			})
+		}()
+	}
+	for range workers {
+		if err := <-errs; err != nil {
+			t.Fatalf("WithRegistryLock() error = %v", err)
+		}
+	}
+
+	// All writes must survive; without the lock, workers overwrite each
+	// other and entries are lost.
+	reg, err := LoadRegistry()
+	if err != nil {
+		t.Fatalf("LoadRegistry() error = %v", err)
+	}
+	if len(reg) != workers {
+		t.Fatalf("len(reg) = %d, want %d (lost updates?)", len(reg), workers)
 	}
 }

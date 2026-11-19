@@ -1,6 +1,6 @@
 package main
 
-import "wolgo/cmd"
+import "github.com/lucidfrontier45/wolgo/cmd"
 
 func main() {
 	cmd.Execute()

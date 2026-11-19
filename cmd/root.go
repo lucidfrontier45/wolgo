@@ -7,6 +7,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Version is the build version, injected at release time via -ldflags -X.
+var Version = "dev"
+
+// Commit is the build commit hash, injected at release time via -ldflags -X.
+var Commit = "unknown"
+
+// Date is the build date, injected at release time via -ldflags -X.
+var Date = "unknown"
+
 // wakeAll, when true, sends WOL to every registered target.
 var wakeAll bool
 
@@ -123,4 +132,6 @@ func runWakeAll() error {
 
 func init() {
 	rootCmd.Flags().BoolVar(&wakeAll, "all", false, "send WOL to every registered alias")
+	rootCmd.Version = fmt.Sprintf("%s (commit %s, built %s)", Version, Commit, Date)
+	rootCmd.SetVersionTemplate("wolgo {{.Version}}\n")
 }

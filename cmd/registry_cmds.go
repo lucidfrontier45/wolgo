@@ -28,32 +28,36 @@ Examples:
 			return err
 		}
 
-		reg, err := LoadRegistry()
-		if err != nil {
-			return err
-		}
-
-		overwriting := false
-		for existingAlias, existingMAC := range reg {
-			if existingMAC == normalized && existingAlias != alias {
-				fmt.Printf("note: %s already registered as %q\n", normalized, existingAlias)
+		// Hold an exclusive lock across load-modify-save so concurrent
+		// register/remove invocations cannot overwrite each other's writes.
+		return WithRegistryLock(func() error {
+			reg, err := LoadRegistry()
+			if err != nil {
+				return err
 			}
-			if existingAlias == alias {
-				overwriting = true
+
+			overwriting := false
+			for existingAlias, existingMAC := range reg {
+				if existingMAC == normalized && existingAlias != alias {
+					fmt.Printf("note: %s already registered as %q\n", normalized, existingAlias)
+				}
+				if existingAlias == alias {
+					overwriting = true
+				}
 			}
-		}
 
-		reg[alias] = normalized
-		if err := SaveRegistry(reg); err != nil {
-			return err
-		}
+			reg[alias] = normalized
+			if err := SaveRegistry(reg); err != nil {
+				return err
+			}
 
-		action := "registered"
-		if overwriting {
-			action = "updated"
-		}
-		fmt.Printf("%s %s -> %s\n", action, alias, normalized)
-		return nil
+			action := "registered"
+			if overwriting {
+				action = "updated"
+			}
+			fmt.Printf("%s %s -> %s\n", action, alias, normalized)
+			return nil
+		})
 	},
 }
 
@@ -91,19 +95,21 @@ Example: wolgo remove office-pc`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		alias := args[0]
-		reg, err := LoadRegistry()
-		if err != nil {
-			return err
-		}
-		if _, ok := reg[alias]; !ok {
-			return fmt.Errorf("alias %q is not registered", alias)
-		}
-		delete(reg, alias)
-		if err := SaveRegistry(reg); err != nil {
-			return err
-		}
-		fmt.Printf("removed %s\n", alias)
-		return nil
+		return WithRegistryLock(func() error {
+			reg, err := LoadRegistry()
+			if err != nil {
+				return err
+			}
+			if _, ok := reg[alias]; !ok {
+				return fmt.Errorf("alias %q is not registered", alias)
+			}
+			delete(reg, alias)
+			if err := SaveRegistry(reg); err != nil {
+				return err
+			}
+			fmt.Printf("removed %s\n", alias)
+			return nil
+		})
 	},
 }
 

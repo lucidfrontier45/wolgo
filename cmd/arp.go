@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"runtime"
@@ -29,10 +30,11 @@ func FindIPsFromMAC(macStr string) ([]net.IP, error) {
 	}
 }
 
-// macStripReplacer strips common MAC address separators.
-var macStripReplacer = strings.NewReplacer(":", "", "-", "", " ", "")
-
 // normalizeMAC strips separators, lowercases, and zero-pads 1-digit octets.
+//
+// Accepted forms: 12 hex digits with no separators, or exactly 6 groups of
+// 1-2 hex digits separated by any mix of ':', '-', and ' '. Anything else
+// is rejected.
 func normalizeMAC(mac string) string {
 	mac = strings.TrimSpace(mac)
 	if !strings.ContainsAny(mac, ":- ") {
@@ -76,18 +78,10 @@ func normalizeMAC(mac string) string {
 	if builder.Len() == 12 {
 		return builder.String()
 	}
-
-	compact := macStripReplacer.Replace(mac)
-	compact = strings.ToLower(compact)
-	if len(compact) != 12 {
-		return ""
-	}
-	for _, r := range compact {
-		if !strings.ContainsRune("0123456789abcdef", r) {
-			return ""
-		}
-	}
-	return compact
+	// Malformed separator input (wrong group count, stray separators) is
+	// rejected rather than guessed at: silently rewriting it into a
+	// different valid MAC could wake the wrong machine.
+	return ""
 }
 
 // findIPsFromMACLinux parses /proc/net/arp on Linux.
@@ -175,8 +169,7 @@ func parseMacOSARP(data, targetMAC string) ([]net.IP, error) {
 		}
 
 		if normalizeMAC(macStr) == targetMAC {
-			ip := net.ParseIP(ipStr)
-			if ip != nil {
+			if ip := parseIP(ipStr); ip != nil {
 				ips = append(ips, ip)
 			}
 		}
@@ -216,7 +209,7 @@ func parseWindowsARP(data, targetMAC string) ([]net.IP, error) {
 			continue
 		}
 		// Skip non-data lines: headers, interface lines
-		ip := net.ParseIP(fields[0])
+		ip := parseIP(fields[0])
 		if ip == nil {
 			continue
 		}
@@ -227,6 +220,17 @@ func parseWindowsARP(data, targetMAC string) ([]net.IP, error) {
 	}
 
 	return ips, nil
+}
+
+// parseIP parses an IP address, tolerating IPv6 zone suffixes such as
+// "fe80::1%en0" which net.ParseIP rejects. The zone is dropped from the
+// returned address.
+func parseIP(s string) net.IP {
+	addr, err := netip.ParseAddr(s)
+	if err != nil {
+		return nil
+	}
+	return net.IP(addr.AsSlice())
 }
 
 // readFile is a thin wrapper around os.ReadFile.

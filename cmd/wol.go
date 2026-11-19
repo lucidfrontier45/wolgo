@@ -6,6 +6,9 @@ import (
 	"strings"
 )
 
+// wolPort is the UDP port Wake-on-LAN magic packets are sent to.
+const wolPort = 9
+
 // parseMAC parses a MAC address string and returns its byte representation.
 // Supports formats: "00:11:22:33:44:55", "00-11-22-33-44-55", "001122334455".
 func parseMAC(macStr string) ([]byte, error) {
@@ -63,22 +66,104 @@ func createMagicPacket(mac []byte) []byte {
 	return packet
 }
 
+// subnetBroadcast returns the directed broadcast address of ipn, or nil for
+// non-IPv4 networks.
+func subnetBroadcast(ipn *net.IPNet) net.IP {
+	ip4 := ipn.IP.To4()
+	if ip4 == nil || len(ipn.Mask) != 4 {
+		return nil
+	}
+	b := make(net.IP, 4)
+	for i := range 4 {
+		b[i] = ip4[i] | ^ipn.Mask[i]
+	}
+	return b
+}
+
+// broadcastTargets returns the UDP addresses a WOL packet should be sent to:
+// the subnet-directed broadcast address of every enabled, non-loopback IPv4
+// interface, plus the global broadcast 255.255.255.255 as a fallback.
+//
+// Directed broadcasts are required for wake-ups routed through other
+// segments (routers drop global broadcast), and each subnet broadcast is
+// routed out of its own interface, covering multi-homed hosts.
+func broadcastTargets() ([]*net.UDPAddr, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, fmt.Errorf("enumerating network interfaces: %w", err)
+	}
+
+	targets := []*net.UDPAddr{{IP: net.IPv4bcast, Port: wolPort}}
+	seen := map[string]bool{net.IPv4bcast.String(): true}
+
+	for i := range ifaces {
+		iface := ifaces[i]
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			return nil, fmt.Errorf("listing addresses of interface %s: %w", iface.Name, err)
+		}
+		for _, addr := range addrs {
+			ipn, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			bcast := subnetBroadcast(ipn)
+			if bcast == nil {
+				continue
+			}
+			key := bcast.String()
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			targets = append(targets, &net.UDPAddr{IP: bcast, Port: wolPort})
+		}
+	}
+	return targets, nil
+}
+
 // sendWOL sends a Wake-on-LAN magic packet to the specified MAC address.
+//
+// The packet is broadcast via a single unbound UDP socket to every subnet
+// broadcast address (the kernel routes each to its interface) and to the
+// global broadcast. It reports success if at least one send succeeded and
+// failure only if every send failed.
 func sendWOL(mac []byte) error {
 	packet := createMagicPacket(mac)
 
-	conn, err := net.Dial("udp", "255.255.255.255:9")
+	targets, err := broadcastTargets()
 	if err != nil {
-		return fmt.Errorf("failed to create connection: %w", err)
+		return err
+	}
+
+	conn, err := net.ListenPacket("udp4", ":0")
+	if err != nil {
+		return fmt.Errorf("failed to create socket: %w", err)
 	}
 	defer func() {
 		_ = conn.Close()
 	}()
 
-	udpConn := conn.(*net.UDPConn)
-	if _, err := udpConn.Write(packet); err != nil {
-		return fmt.Errorf("failed to send packet: %w", err)
+	var firstErr error
+	sent := 0
+	for _, target := range targets {
+		if _, err := conn.WriteTo(packet, target); err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("sending to %s: %w", target, err)
+			}
+			continue
+		}
+		sent++
 	}
 
+	if sent == 0 {
+		if firstErr != nil {
+			return fmt.Errorf("failed to send packet: %w", firstErr)
+		}
+		return fmt.Errorf("failed to send packet: no reachable broadcast target")
+	}
 	return nil
 }
